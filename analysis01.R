@@ -1,4 +1,4 @@
-# Name: Fastq_checks.R
+# Name: analysis01.R
 # Auth: u.niazi@imperial.ac.uk
 # Date: 12/01/2016
 # Desc: DE analysis for count matrix data using RNA-Seq
