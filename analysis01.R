@@ -8,13 +8,13 @@ library(DESeq2)
 
 
 ## data loading and setting
-dfDat = read.csv('Data_external/Counts/toc.csv', header=T)
-rownames(dfDat) = dfDat$emtrez_id
-dfDat = dfDat[,-1]
+dfDat = read.csv('Data_external/Counts/toc_raw.txt', header=T, sep=' ')
+# rownames(dfDat) = dfDat$emtrez_id
+# dfDat = dfDat[,-1]
 
 cn = colnames(dfDat)
 fGroups = gsub('(\\w)\\d+', '\\1', cn)
-fGroups = factor(fGroups, levels=c('C', 'H', 'D'))
+fGroups = factor(fGroups, levels=c('D', 'H', 'C'))
 
 mDat = as.matrix(dfDat)
 dfDesign = data.frame(condition=fGroups, row.names = colnames(mDat))
@@ -102,6 +102,24 @@ write.csv(dfPlot, file='Results/DEAnalysis_D.vs.H.csv')
 dfGenes = data.frame(P.Value=dfPlot$pvalue, logFC=dfPlot$log2FoldChange, adj.P.Val = dfPlot$padj, SYMBOL=dfPlot$SYMBOL)
 f_plotVolcano(dfGenes, 'D vs H')
 
+## third comparison
+res = as.data.frame(oRes.H.vs.C)
+
+rn = rownames(res)
+df = select(org.Hs.eg.db, as.character(rn), c('SYMBOL'), 'ENTREZID')
+df = df[!duplicated(df$ENTREZID),]
+rownames(df) = df$ENTREZID
+dfPlot = res
+dfPlot = cbind(dfPlot[rn,], df[rn,])
+dfPlot = na.omit(dfPlot)
+
+## write csv file
+write.csv(dfPlot, file='Results/DEAnalysis_H.vs.C.csv')
+
+dfGenes = data.frame(P.Value=dfPlot$pvalue, logFC=dfPlot$log2FoldChange, adj.P.Val = dfPlot$padj, SYMBOL=dfPlot$SYMBOL)
+f_plotVolcano(dfGenes, 'H vs C')
+
+
 ## group the genes by expression profile i.e. DE or not DE
 cvCommonGenes = unique(c(rownames(dfD.vs.H), rownames(dfD.vs.C)))
 mCommonGenes = matrix(NA, nrow=length(cvCommonGenes), ncol=2)
@@ -178,35 +196,6 @@ library(org.Hs.eg.db)
 library(downloader)
 source('../CGraphClust/CGraphClust.R')
 
-## change the significant clusters function
-# get the significant clusters matrix and the p.values
-setGeneric('getSignificantClusters', def = function(obj, mCounts, fGroups, ...) standardGeneric('getSignificantClusters'))
-setMethod('getSignificantClusters', signature='CGraphClust', definition = function(obj, mCounts, fGroups, ...){
-  #   # stabalize the data before performing DE
-  #   if (bStabalize){
-  #     mCounts = t(apply(mCounts, 1, function(x) f_ivStabilizeData(x, fGroups)))
-  #     colnames(mCounts) = fGroups
-  #   }  
-  # get the marginal of each cluster
-  mCent = getClusterMarginal(obj, mCounts, bScaled = F)
-  # check which cluster shows significant p-values
-  #p.vals = na.omit(apply(mCent, 1, function(x) pairwise.t.test(x, fGroups, p.adjust.method = 'BH')$p.value))
-  #fSig = apply(p.vals, 2, function(x) any(x < 0.01))
-  p.val = apply(mCent, 1, function(x) anova(lm(x ~ fGroups))$Pr[1])
-  #p.val = apply(mCent, 1, function(x) oneway.test(x ~ fGroups)$p.value)
-  p.val = p.adjust(p.val, method = 'BH')
-  fSig = p.val < 0.01
-  mCent = mCent[fSig,]
-  p.val = p.val[fSig]
-  # reorder the matrix based on range of mean
-  rSort = apply(mCent, 1, function(x){ m = tapply(x, fGroups, mean); r = range(m); diff(r)}) 
-  mCent = mCent[order(rSort, decreasing = T),]
-  p.val = p.val[order(rSort, decreasing = T)]
-  lRet = list(clusters=mCent, p.val=p.val)  
-  return(lRet)
-})
-
-
 # plotting parameters
 p.old = par()
 
@@ -260,26 +249,29 @@ hist(sample(mCor, 1000, replace = F), prob=T, main='Correlation of genes', xlab=
 axis(1, at = seq(-1, 1, by=0.1), las=2)
 
 # stabalize the data and check correlation again
-mCounts.bk = mCounts
-# stabalize the data
-mCounts.st = apply(mCounts, 2, function(x) f_ivStabilizeData(x, fGroups))
-rownames(mCounts.st) = fGroups
-
-# create a correlation matrix
-mCor = cor(mCounts.st)
-# check distribution 
-hist(sample(mCor, 1000, replace = F), prob=T, main='Correlation of genes', xlab='', family='Arial', breaks=20, xaxt='n')
-axis(1, at = seq(-1, 1, by=0.1), las=2)
+# mCounts.bk = mCounts
+# # stabalize the data
+# mCounts.st = apply(mCounts, 2, function(x) f_ivStabilizeData(x, fGroups))
+# rownames(mCounts.st) = fGroups
+# 
+# # create a correlation matrix
+# mCor = cor(mCounts.st)
+# # check distribution 
+# hist(sample(mCor, 1000, replace = F), prob=T, main='Correlation of genes', xlab='', family='Arial', breaks=20, xaxt='n')
+# axis(1, at = seq(-1, 1, by=0.1), las=2)
 
 # use the unstabalized version
 # create the graph cluster object
 # using absolute correlation vs actual values lead to different clusters
-oGr = CGraphClust(dfGraph, abs(mCor), iCorCut = 0.65, bSuppressPlots = F)
+oGr = CGraphClust(dfGraph, abs(mCor), iCorCut = 0.6, bSuppressPlots = T)
 
+# sanity check
+getSignificantClusters(oGr, t(mCounts), fGroups, p.cut = 0.02)
 ## general graph structure
 set.seed(1)
 plot.final.graph(oGr)
-
+ecount(getFinalGraph(oGr))
+vcount(getFinalGraph(oGr))
 ## community structure
 ## overview of how the commuinties look like
 # plot the main communities in 2 different ways
@@ -317,7 +309,7 @@ mCent = mPrintCentralitySummary(oGr)
 
 ## top vertices based on centrality scores
 ## get a table of top vertices 
-dfTopGenes.cent = dfGetTopVertices(oGr, iQuantile = 0.90)
+dfTopGenes.cent = dfGetTopVertices(oGr, iQuantile = 0.85)
 rownames(dfTopGenes.cent) = dfTopGenes.cent$VertexID
 # assign metadata annotation to these genes and clusters
 dfCluster = getClusterMapping(oGr)
@@ -357,7 +349,7 @@ par(mar=c(1,1,1,1)+0.1)
 for(i in 1:length(lev)){
   ig = induced_subgraph(getFinalGraph(oGr), vids = as.character(dfTopGenes.cent$VertexID))
   fG = factor(fGroups, levels= c(levels(fGroups)[1], lev[-i], lev[i]) )
-  ig = f_igCalculateVertexSizesAndColors(ig, t(m), fG, bColor = T, iSize=30)
+  ig = f_igCalculateVertexSizesAndColors(ig, t(m), fG, bColor = T, iSize=10)
   n = V(ig)$name
   lab = f_dfGetGeneAnnotation(n)
   V(ig)$label = as.character(lab$SYMBOL)
@@ -404,16 +396,17 @@ par(p.old)
 plot.mean.expressions(oGr, t(mCounts), fGroups, legend.pos = 'bottomleft', main='Total Change in Each Cluster', cex.axis=0.7)
 # only significant clusters
 par(mar=c(7, 3, 2, 2)+0.1)
-plot.significant.expressions(oGr, t(mCounts), fGroups, main='Significant Clusters', lwd=1, bStabalize = T, cex.axis=0.7)
+plot.significant.expressions(oGr, t(mCounts), fGroups, main='Significant Clusters', lwd=1, bStabalize = T, cex.axis=0.7, p.cut=0.02,
+                             legend.pos='bottomright')
 # principal component plots
-pr.out = plot.components(oGr, t(mCounts), fGroups, bStabalize = T)
+pr.out = plot.components(oGr, t(mCounts), fGroups, bStabalize = T, p.cut=0.02)
 par(mar=c(4,2,4,2))
 biplot(pr.out, cex=0.8, cex.axis=0.8, arrow.len = 0)
 # plot summary heatmaps
 # marginal expression level in each cluster
-plot.heatmap.significant.clusters(oGr, t(mCounts), fGroups, bStabalize = F)
+plot.heatmap.significant.clusters(oGr, t(mCounts), fGroups, bStabalize = F, p.cut=0.02)
 # plot variance of cluster
-m = getSignificantClusters(oGr, t(mCounts), fGroups)$clusters
+m = getSignificantClusters(oGr, t(mCounts), fGroups, p.cut=0.02)$clusters
 #m = getClusterMarginal(oGr, t(mCounts))
 # plot.cluster.variance(oGr, m[c('1280218', '1280215'),], fGroups, log = F)
 
@@ -470,7 +463,7 @@ dfCluster = cbind(dfCluster[as.character(df$ENTREZID),], SYMBOL=df$SYMBOL, GENEN
 write.csv(dfCluster, file='Results/Clusters.csv')
 
 ##### Various plots for one cluster of choice
-csClust = '211859'
+csClust = '913531'
 
 lev = levels(fGroups)[-1]
 m = mCounts
