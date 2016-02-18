@@ -8,9 +8,20 @@ library(DESeq2)
 library(org.Hs.eg.db)
 
 ## data loading and setting
-dfDat = read.csv('Data_external/Counts/toc.csv', header=T)
-rownames(dfDat) = dfDat$emtrez_id
-dfDat = dfDat[,-1]
+# dfDat = read.csv('Data_external/Counts/toc.csv', header=T)
+# rownames(dfDat) = dfDat$emtrez_id
+# dfDat = dfDat[,-1]
+# 
+# cn = colnames(dfDat)
+# fGroups = gsub('(\\w)\\d+', '\\1', cn)
+# fGroups = factor(fGroups, levels=c('C', 'H', 'D'))
+# 
+# mDat = as.matrix(dfDat)
+# colnames(mDat) = fGroups
+# mDat = mDat# + 1
+dfDat = read.csv('Data_external/Counts/toc_raw.txt', header=T, sep=' ')
+# rownames(dfDat) = dfDat$emtrez_id
+# dfDat = dfDat[,-1]
 
 cn = colnames(dfDat)
 fGroups = gsub('(\\w)\\d+', '\\1', cn)
@@ -18,7 +29,7 @@ fGroups = factor(fGroups, levels=c('C', 'H', 'D'))
 
 mDat = as.matrix(dfDat)
 colnames(mDat) = fGroups
-mDat = mDat# + 1
+
 sf = estimateSizeFactorsForMatrix(mDat)
 mCounts = sweep(mDat, 2, sf, '/')
 mCounts = na.omit(mCounts)
