@@ -14,3 +14,8 @@ DESeq2 is used to call DE genes in the 3 comparisons, out of which the 2 compari
 
 # expressed.R
 Normalizes the data using DESeq2::estimateSizeFactorsForMatrix. Creates a vector of mean expressions for each group. Plots the log distribution, approximating it as normally distributed. Uses cut to assign groups to each gene based on quantiles of the expression vector. Saves the data.
+
+# find_clusters.R
+uses the msd data, removes missing values, scales and clusters the data to find subgroups.
+
+
